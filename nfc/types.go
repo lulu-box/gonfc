@@ -194,11 +194,11 @@ type DiscoveryOptions struct {
 	Restart      bool // force restart discovery
 }
 
-// DefaultDiscovery returns reader-only discovery on all technologies.
+// DefaultDiscovery matches nfcDemoApp poll mode (DEFAULT_NFA_TECH_MASK, no restart).
 func DefaultDiscovery() DiscoveryOptions {
 	return DiscoveryOptions{
-		Technologies: TechAll,
-		ReaderOnly:   true,
-		Restart:      true,
+		Technologies: TechDefault,
+		ReaderOnly:   false,
+		Restart:      false,
 	}
 }

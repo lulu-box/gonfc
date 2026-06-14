@@ -11,9 +11,9 @@ import (
 )
 
 // SetTagHandler registers handlers for tag discovery and removal.
+// C callbacks are registered in StartDiscovery, after Open, matching nfcDemoApp.
 func SetTagHandler(h TagHandler) {
 	setTagHandler(h)
-	C.nfcgo_register_tag_cb()
 }
 
 // ClearTagHandler removes the tag handler.

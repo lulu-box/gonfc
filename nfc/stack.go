@@ -9,9 +9,7 @@ import "fmt"
 
 // Open initializes the NFC stack. Call Close when done.
 func Open() error {
-	if debug {
-		C.InitializeLogLevel()
-	}
+	C.InitializeLogLevel()
 	Debugf("Open: doInitialize")
 	rc := C.doInitialize()
 	Debugf("Open: doInitialize done (%d)", int(rc))
@@ -39,7 +37,9 @@ func Active() bool {
 
 // StartDiscovery begins polling/listening with the given options.
 func StartDiscovery(opts DiscoveryOptions) {
-	Debugf("StartDiscovery")
+	Debugf("StartDiscovery: registerTagCallback")
+	C.nfcgo_register_tag_cb()
+	Debugf("StartDiscovery: doEnableDiscovery")
 	C.doEnableDiscovery(
 		C.int(opts.Technologies),
 		boolToCInt(opts.ReaderOnly),
