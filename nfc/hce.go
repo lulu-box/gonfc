@@ -7,7 +7,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 )
 
 // SetHCEHandler registers handlers for host card emulation events.
@@ -28,7 +27,7 @@ func SendAPDU(apdu []byte) error {
 		return errors.New("nfc: empty APDU")
 	}
 	if rc := C.nfcHce_sendCommand(bytesPtr(apdu), C.uint(len(apdu))); rc != 0 {
-		return fmt.Errorf("nfc: send APDU failed (%d)", int(rc))
+		return StatusError("send APDU", int(rc))
 	}
 	return nil
 }
@@ -39,7 +38,7 @@ func RegisterT3TID(id []byte) error {
 		return errors.New("nfc: empty T3T identifier")
 	}
 	if rc := C.nfcHce_registerT3tIdentifier(bytesPtr(id), C.uchar(len(id))); rc != 0 {
-		return fmt.Errorf("nfc: register T3T ID failed (%d)", int(rc))
+		return StatusError("register T3T ID", int(rc))
 	}
 	return nil
 }

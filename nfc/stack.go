@@ -5,8 +5,6 @@ package nfc
 */
 import "C"
 
-import "fmt"
-
 // Open initializes the NFC stack. Call Close when done.
 func Open() error {
 	C.InitializeLogLevel()
@@ -14,7 +12,7 @@ func Open() error {
 	rc := C.doInitialize()
 	Debugf("Open: doInitialize done (%d)", int(rc))
 	if rc != 0 {
-		return fmt.Errorf("nfc: open failed (%d)", int(rc))
+		return StatusError("open", int(rc))
 	}
 	return nil
 }
@@ -25,7 +23,7 @@ func Close() error {
 	rc := C.doDeinitialize()
 	Debugf("Close: doDeinitialize done (%d)", int(rc))
 	if rc != 0 {
-		return fmt.Errorf("nfc: close failed (%d)", int(rc))
+		return StatusError("close", int(rc))
 	}
 	return nil
 }
@@ -59,7 +57,7 @@ func StopDiscovery() {
 // SelectNext activates the next tag in the field.
 func SelectNext() error {
 	if rc := C.selectNextTag(); rc != 0 {
-		return fmt.Errorf("nfc: select next tag failed (%d)", int(rc))
+		return StatusError("select next tag", int(rc))
 	}
 	return nil
 }

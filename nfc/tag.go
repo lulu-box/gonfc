@@ -8,7 +8,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 )
 
@@ -31,7 +30,7 @@ func (t Tag) NDEFInfo() (NDEFInfo, bool) {
 // Reconnect reconnects and reselects the tag.
 func (t Tag) Reconnect() error {
 	if rc := C.nfcTag_doHandleReconnect(C.uint(t.Handle)); rc != 0 {
-		return fmt.Errorf("nfc: reconnect failed (%d)", int(rc))
+		return StatusError("reconnect", int(rc))
 	}
 	return nil
 }
@@ -51,7 +50,7 @@ func (t Tag) Read() ([]byte, RecordType, error) {
 	var rt C.nfc_friendly_type_t
 	n := C.nfcTag_readNdef(C.uint(t.Handle), bytesPtr(buf), C.uint(len(buf)), &rt)
 	if n <= 0 {
-		return nil, RecordOther, fmt.Errorf("nfc: read failed (%d)", int(n))
+		return nil, RecordOther, StatusError("read", int(n))
 	}
 	if int(n) > len(buf) {
 		n = C.int(len(buf))
@@ -65,20 +64,41 @@ func (t Tag) Write(msg []byte) error {
 		return errors.New("nfc: empty message")
 	}
 	if rc := C.nfcTag_writeNdef(C.uint(t.Handle), bytesPtr(msg), C.uint(len(msg))); rc != 0 {
-		return fmt.Errorf("nfc: write failed (%d)", int(rc))
+		return StatusError("write", int(rc))
 	}
 	return nil
 }
 
 // Formatable reports whether the tag can be NDEF-formatted.
+// For Mifare Classic the C stack always returns true; actual formatability
+// depends on sector keys — use WriteHint for user-facing guidance.
 func (t Tag) Formatable() bool {
 	return C.nfcTag_isFormatable(C.uint(t.Handle)) == 1
+}
+
+// SlowNDEFDetection reports whether NDEF detection needs time after tag arrival.
+func (t Tag) SlowNDEFDetection() bool {
+	return t.Technology == TargetMifareClassic
+}
+
+// WriteHint returns guidance for writing NDEF to this tag, or "" if none applies.
+func (t Tag) WriteHint() string {
+	switch t.Technology {
+	case TargetNDEFFormat:
+		return "formatable — try: gonfc write text \"Hello\""
+	case TargetMifareClassic:
+		return "try: gonfc write text \"Hello\" (requires factory/default Mifare sector keys)"
+	}
+	if t.Formatable() {
+		return "formatable — try: gonfc write text \"Hello\""
+	}
+	return ""
 }
 
 // Format makes the tag NDEF-formatted.
 func (t Tag) Format() error {
 	if rc := C.nfcTag_formatTag(C.uint(t.Handle)); rc != 0 {
-		return fmt.Errorf("nfc: format failed (%d)", int(rc))
+		return StatusError("format", int(rc))
 	}
 	return nil
 }
@@ -89,7 +109,7 @@ func (t Tag) MakeReadOnly(key []byte) error {
 		return errors.New("nfc: empty key")
 	}
 	if rc := C.nfcTag_makeReadOnly(C.uint(t.Handle), bytesPtr(key), C.uchar(len(key))); rc != 0 {
-		return fmt.Errorf("nfc: make read-only failed (%d)", int(rc))
+		return StatusError("make read-only", int(rc))
 	}
 	return nil
 }
@@ -97,7 +117,7 @@ func (t Tag) MakeReadOnly(key []byte) error {
 // SwitchRF switches the RF interface for ISO-DEP and Mifare Classic tags.
 func (t Tag) SwitchRF(frameRF bool) error {
 	if rc := C.nfcTag_switchRF(C.uint(t.Handle), boolToCInt(frameRF)); rc != 0 {
-		return fmt.Errorf("nfc: switch RF failed (%d)", int(rc))
+		return StatusError("switch RF", int(rc))
 	}
 	return nil
 }
@@ -120,7 +140,7 @@ func (t Tag) Transceive(cmd []byte, maxRx int, timeoutMs uint) ([]byte, error) {
 		C.uint(timeoutMs),
 	)
 	if n <= 0 {
-		return nil, fmt.Errorf("nfc: transceive failed (%d)", int(n))
+		return nil, StatusError("transceive", int(n))
 	}
 	if int(n) > maxRx {
 		n = C.int(maxRx)
@@ -174,7 +194,7 @@ func ParseHandoverSelect(record []byte) (HandoverSelect, error) {
 	}
 	var ci C.nfc_handover_select_t
 	if rc := C.ndef_readHandoverSelectInfo(bytesPtr(record), C.uint(len(record)), &ci); rc != 0 {
-		return HandoverSelect{}, fmt.Errorf("nfc: parse handover select failed (%d)", int(rc))
+		return HandoverSelect{}, StatusError("parse handover select", int(rc))
 	}
 	return handoverSelectFromC(&ci), nil
 }
@@ -186,7 +206,7 @@ func ParseHandoverRequest(record []byte) (HandoverRequest, error) {
 	}
 	var ci C.nfc_handover_request_t
 	if rc := C.ndef_readHandoverRequestInfo(bytesPtr(record), C.uint(len(record)), &ci); rc != 0 {
-		return HandoverRequest{}, fmt.Errorf("nfc: parse handover request failed (%d)", int(rc))
+		return HandoverRequest{}, StatusError("parse handover request", int(rc))
 	}
 	return handoverRequestFromC(&ci), nil
 }

@@ -7,14 +7,13 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 )
 
 // SetLLCPClientHandler registers handlers for connectionless LLCP client events.
 func SetLLCPClientHandler(h PeerHandler) error {
 	setLLCPClientHandler(h)
 	if rc := C.nfcgo_register_llcp_client_cb(); rc != 0 {
-		return fmt.Errorf("nfc: set LLCP client handler failed (%d)", int(rc))
+		return StatusError("set LLCP client handler", int(rc))
 	}
 	return nil
 }
@@ -29,7 +28,7 @@ func ClearLLCPClientHandler() {
 func StartLLCPServer(h LLCPHandler) error {
 	setLLCPHandler(h)
 	if rc := C.nfcgo_register_llcp_server_cb(); rc != 0 {
-		return fmt.Errorf("nfc: start LLCP server failed (%d)", int(rc))
+		return StatusError("start LLCP server", int(rc))
 	}
 	return nil
 }
@@ -46,7 +45,7 @@ func LLCPSend(msg []byte) error {
 		return errors.New("nfc: empty message")
 	}
 	if rc := C.nfcLlcp_ConnLessSendMessage(bytesPtr(msg), C.uint(len(msg))); rc != 0 {
-		return fmt.Errorf("nfc: LLCP send failed (%d)", int(rc))
+		return StatusError("LLCP send", int(rc))
 	}
 	return nil
 }
@@ -58,7 +57,7 @@ func LLCPReceive(buf []byte) (int, error) {
 	}
 	var length C.uint = C.uint(len(buf))
 	if rc := C.nfcLlcp_ConnLessReceiveMessage(bytesPtr(buf), &length); rc != 0 {
-		return 0, fmt.Errorf("nfc: LLCP receive failed (%d)", int(rc))
+		return 0, StatusError("LLCP receive", int(rc))
 	}
 	if int(length) > len(buf) {
 		length = C.uint(len(buf))
