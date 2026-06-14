@@ -1,0 +1,45 @@
+# Binaries
+/gonfc
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+*.test
+*.out
+*.o
+*.a
+
+# Go workspace / module cache
+/vendor/
+
+# Test and coverage
+coverage.out
+coverage.html
+*.prof
+*.pprof
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors and IDEs
+.claude/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Debug and temp files
+*.log
+tmp/
+dist/
