@@ -48,14 +48,31 @@ The package is named `golang-go` (not `golang`) on Raspberry Pi OS.
 
 ## Build & run
 
-```bash
-cd goapp
-go build -o nfcgo .
+Build on the Pi (or other target with the library installed):
 
-sudo ./nfcgo poll
-sudo ./nfcgo read
-sudo ./nfcgo write text "Hello" en
-sudo ./nfcgo write uri  https://www.nxp.com
+```bash
+go build -o gonfc .
+```
+
+If pkg-config can't find `libnfc-nci.pc`:
+
+```bash
+PKG_CONFIG_PATH=/usr/local/lib/pkgconfig go build -o gonfc .
+```
+
+Run with `sudo` (the stack needs access to the NFC device):
+
+```bash
+sudo ./gonfc poll
+sudo ./gonfc read
+sudo ./gonfc write text "Hello" en
+sudo ./gonfc write uri https://www.nxp.com
+```
+
+Pass `-debug` before the subcommand to trace startup (Open / StartDiscovery):
+
+```bash
+sudo ./gonfc -debug poll
 ```
 
 ## API overview
@@ -81,10 +98,4 @@ record, _ := nfc.NewTextRecord("en", "Hello")
 record, _ := nfc.NewURIRecord("https://example.com")
 lang, text, _ := nfc.ParseText(raw)
 uri, _ := nfc.ParseURI(raw)
-```
-
-If pkg-config can't find `libnfc-nci.pc`:
-
-```bash
-PKG_CONFIG_PATH=/usr/local/lib/pkgconfig go build -o nfcgo .
 ```

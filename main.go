@@ -1,10 +1,10 @@
-// Command nfcgo is a small Go demo for the linux_libnfc-nci stack, mirroring the
+// Command gonfc is a small Go demo for the linux_libnfc-nci stack, mirroring the
 // poll / read / write flows of the C nfcDemoApp.
 //
-//	nfcgo poll                  detect tags continuously
-//	nfcgo read                  read NDEF from the next tag, then exit
-//	nfcgo write text <text> [lang]
-//	nfcgo write uri  <uri>
+//	gonfc poll                  detect tags continuously
+//	gonfc read                  read NDEF from the next tag, then exit
+//	gonfc write text <text> [lang]
+//	gonfc write uri  <uri>
 package main
 
 import (
@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 
 	"github.com/lulu-box/gonfc/nfc"
 )
@@ -60,12 +61,12 @@ func main() {
 }
 
 func usage() {
-	fmt.Print(`nfcgo - Go demo for linux_libnfc-nci
+	fmt.Print(`gonfc - Go demo for linux_libnfc-nci
 
-  nfcgo [-debug] poll                   detect tags continuously
-  nfcgo [-debug] read                   read NDEF from the next tag, then exit
-  nfcgo [-debug] write text <text> [lang]
-  nfcgo [-debug] write uri  <uri>
+  gonfc [-debug] poll                   detect tags continuously
+  gonfc [-debug] read                   read NDEF from the next tag, then exit
+  gonfc [-debug] write text <text> [lang]
+  gonfc [-debug] write uri  <uri>
 `)
 }
 
@@ -170,13 +171,79 @@ func buildRecord(args []string) ([]byte, error) {
 }
 
 func printTag(t nfc.Tag) {
-	fmt.Printf("\nTag found: tech=%d uid=%s\n", t.Technology, strings.ToUpper(hex.EncodeToString(t.UID)))
+	fmt.Printf("\nTag found: %s uid=%s\n", tagTypeName(t.Technology), strings.ToUpper(hex.EncodeToString(t.UID)))
+}
+
+func tagTypeName(tech uint) string {
+	switch tech {
+	case nfc.TargetISO14443_3A:
+		return "ISO14443-3A"
+	case nfc.TargetISO14443_3B:
+		return "ISO14443-3B"
+	case nfc.TargetISO14443_4:
+		return "ISO14443-4"
+	case nfc.TargetFelica:
+		return "FeliCa"
+	case nfc.TargetISO15693:
+		return "ISO15693"
+	case nfc.TargetNDEF:
+		return "NDEF"
+	case nfc.TargetNDEFFormat:
+		return "NDEF formatable"
+	case nfc.TargetMifareClassic:
+		return "Mifare Classic"
+	case nfc.TargetMifareUL:
+		return "Mifare Ultralight"
+	case nfc.TargetKovioBarcode:
+		return "Kovio barcode"
+	case nfc.TargetISO14443_3A3B:
+		return "ISO14443-3A/3B"
+	default:
+		return fmt.Sprintf("type %d", tech)
+	}
+}
+
+// readNDEF waits for NDEF detection on slow tag types (notably Mifare Classic)
+// and retries transient read failures with reconnect.
+func readNDEF(t nfc.Tag) ([]byte, nfc.RecordType, error) {
+	if t.Technology != nfc.TargetMifareClassic {
+		return t.Read()
+	}
+
+	deadline := time.Now().Add(800 * time.Millisecond)
+	var lastReadErr error
+
+	for time.Now().Before(deadline) {
+		raw, rt, err := t.Read()
+		if err == nil {
+			return raw, rt, nil
+		}
+		if errors.Is(err, nfc.ErrNotNDEF) {
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		lastReadErr = err
+		_ = t.Reconnect()
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	raw, rt, err := t.Read()
+	if err == nil {
+		return raw, rt, nil
+	}
+	if lastReadErr != nil {
+		return nil, nfc.RecordOther, lastReadErr
+	}
+	return nil, rt, err
 }
 
 func printNDEF(t nfc.Tag) {
-	raw, rt, err := t.Read()
+	raw, rt, err := readNDEF(t)
 	if errors.Is(err, nfc.ErrNotNDEF) {
 		fmt.Println("  NDEF: no")
+		if t.Formatable() {
+			fmt.Println("  (formatable — try: gonfc write text \"Hello\")")
+		}
 		return
 	}
 	if err != nil {
