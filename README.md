@@ -36,6 +36,16 @@ goapp/
 - A C toolchain + `pkg-config`.
 - Go 1.21+. Build **natively on the target** (e.g. the Pi).
 
+## Installing Go on Raspberry Pi
+
+```bash
+sudo apt update
+sudo apt install golang-go
+go version
+```
+
+The package is named `golang-go` (not `golang`) on Raspberry Pi OS.
+
 ## Build & run
 
 ```bash
@@ -51,25 +61,22 @@ sudo ./nfcgo write uri  https://www.nxp.com
 ## API overview
 
 ```go
-import "github.com/nehmeroumani/linux_libnfc-nci/goapp/nfc"
+import "github.com/lulu-box/gonfc/nfc"
 
-// Stack lifecycle
-nfc.Open()
-defer nfc.Close()
-
-// Tag discovery
 nfc.SetTagHandler(nfc.TagHandler{
     OnDiscovered: func(t nfc.Tag) { ... },
     OnRemoved:    func() { ... },
 })
-nfc.StartDiscovery(nfc.DefaultDiscovery())
+nfc.Open()
+defer nfc.Close()
 
-// Tag operations
+nfc.StartDiscovery(nfc.DefaultDiscovery())
+defer nfc.StopDiscovery()
+
 info, ok := tag.NDEFInfo()
 raw, rt, err := tag.Read()
 err = tag.Write(record)
 
-// Build and parse NDEF records
 record, _ := nfc.NewTextRecord("en", "Hello")
 record, _ := nfc.NewURIRecord("https://example.com")
 lang, text, _ := nfc.ParseText(raw)

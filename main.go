@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -19,26 +20,32 @@ import (
 	"github.com/lulu-box/gonfc/nfc"
 )
 
+var debug = flag.Bool("debug", false, "enable debug logging")
+
 var (
 	discovered = make(chan nfc.Tag, 8)
 	removed    = make(chan struct{}, 8)
 )
 
 func main() {
-	if len(os.Args) < 2 {
+	flag.Parse()
+	nfc.SetDebug(*debug)
+
+	args := flag.Args()
+	if len(args) < 1 {
 		usage()
 		os.Exit(1)
 	}
 
 	var err error
-	switch os.Args[1] {
+	switch args[0] {
 	case "poll":
 		err = run(poll)
 	case "read":
 		err = run(readOne)
 	case "write":
 		var msg []byte
-		if msg, err = buildRecord(os.Args[2:]); err == nil {
+		if msg, err = buildRecord(args[1:]); err == nil {
 			err = run(func(ctx context.Context) error { return writeOne(ctx, msg) })
 		}
 	default:
@@ -55,10 +62,10 @@ func main() {
 func usage() {
 	fmt.Print(`nfcgo - Go demo for linux_libnfc-nci
 
-  nfcgo poll                   detect tags continuously
-  nfcgo read                   read NDEF from the next tag, then exit
-  nfcgo write text <text> [lang]
-  nfcgo write uri  <uri>
+  nfcgo [-debug] poll                   detect tags continuously
+  nfcgo [-debug] read                   read NDEF from the next tag, then exit
+  nfcgo [-debug] write text <text> [lang]
+  nfcgo [-debug] write uri  <uri>
 `)
 }
 

@@ -9,7 +9,13 @@ import "fmt"
 
 // Open initializes the NFC stack. Call Close when done.
 func Open() error {
-	if rc := C.doInitialize(); rc != 0 {
+	if debug {
+		C.InitializeLogLevel()
+	}
+	Debugf("Open: doInitialize")
+	rc := C.doInitialize()
+	Debugf("Open: doInitialize done (%d)", int(rc))
+	if rc != 0 {
 		return fmt.Errorf("nfc: open failed (%d)", int(rc))
 	}
 	return nil
@@ -17,7 +23,10 @@ func Open() error {
 
 // Close shuts down the NFC stack.
 func Close() error {
-	if rc := C.doDeinitialize(); rc != 0 {
+	Debugf("Close: doDeinitialize")
+	rc := C.doDeinitialize()
+	Debugf("Close: doDeinitialize done (%d)", int(rc))
+	if rc != 0 {
 		return fmt.Errorf("nfc: close failed (%d)", int(rc))
 	}
 	return nil
@@ -30,17 +39,21 @@ func Active() bool {
 
 // StartDiscovery begins polling/listening with the given options.
 func StartDiscovery(opts DiscoveryOptions) {
+	Debugf("StartDiscovery")
 	C.doEnableDiscovery(
 		C.int(opts.Technologies),
 		boolToCInt(opts.ReaderOnly),
 		boolToCInt(opts.HostRouting),
 		boolToCInt(opts.Restart),
 	)
+	Debugf("StartDiscovery done")
 }
 
 // StopDiscovery stops polling and listening.
 func StopDiscovery() {
+	Debugf("StopDiscovery")
 	C.disableDiscovery()
+	Debugf("StopDiscovery done")
 }
 
 // SelectNext activates the next tag in the field.
