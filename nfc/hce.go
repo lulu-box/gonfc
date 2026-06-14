@@ -37,6 +37,9 @@ func RegisterT3TID(id []byte) error {
 	if len(id) == 0 {
 		return errors.New("nfc: empty T3T identifier")
 	}
+	if len(id) > 255 {
+		return errors.New("nfc: T3T identifier too long (max 255 bytes)")
+	}
 	if rc := C.nfcHce_registerT3tIdentifier(bytesPtr(id), C.uchar(len(id))); rc != 0 {
 		return StatusError("register T3T ID", int(rc))
 	}

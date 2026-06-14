@@ -49,9 +49,15 @@ func (t Tag) Read() ([]byte, RecordType, error) {
 	buf := make([]byte, info.Length)
 	var rt C.nfc_friendly_type_t
 	n := C.nfcTag_readNdef(C.uint(t.Handle), bytesPtr(buf), C.uint(len(buf)), &rt)
-	if n <= 0 {
+	if n < 0 {
 		return nil, RecordOther, StatusError("read", int(n))
 	}
+	if n == 0 {
+		// info.Length > 0 was guaranteed above, so a zero-byte read is a failure.
+		return nil, RecordOther, errors.New("nfc: read returned no data")
+	}
+	// The buffer was sized to info.Length from a prior NDEFInfo() call; a larger
+	// message would be truncated here.
 	if int(n) > len(buf) {
 		n = C.int(len(buf))
 	}
@@ -108,6 +114,9 @@ func (t Tag) MakeReadOnly(key []byte) error {
 	if len(key) == 0 {
 		return errors.New("nfc: empty key")
 	}
+	if len(key) > 255 {
+		return errors.New("nfc: key too long (max 255 bytes)")
+	}
 	if rc := C.nfcTag_makeReadOnly(C.uint(t.Handle), bytesPtr(key), C.uchar(len(key))); rc != 0 {
 		return StatusError("make read-only", int(rc))
 	}
@@ -139,8 +148,11 @@ func (t Tag) Transceive(cmd []byte, maxRx int, timeoutMs uint) ([]byte, error) {
 		C.int(maxRx),
 		C.uint(timeoutMs),
 	)
-	if n <= 0 {
+	if n < 0 {
 		return nil, StatusError("transceive", int(n))
+	}
+	if n == 0 {
+		return nil, errors.New("nfc: transceive returned no data")
 	}
 	if int(n) > maxRx {
 		n = C.int(maxRx)

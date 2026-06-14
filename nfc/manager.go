@@ -14,6 +14,9 @@ func SetNCIConfig(id uint8, data []byte) error {
 	if len(data) == 0 {
 		return errors.New("nfc: empty config data")
 	}
+	if len(data) > 255 {
+		return errors.New("nfc: config data too long (max 255 bytes)")
+	}
 	if rc := C.nfcManager_setConfig(C.uchar(id), C.uchar(len(data)), bytesPtr(data)); rc != 0 {
 		return StatusError("set NCI config", int(rc))
 	}

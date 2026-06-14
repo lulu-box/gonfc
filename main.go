@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/lulu-box/gonfc/nfc"
@@ -37,10 +38,33 @@ type tagEvent struct {
 
 var tagEvents = make(chan tagEvent, tagEventQueue)
 
+// pushTagEvent queues a tag event from a C callback thread without blocking the
+// NFC stack. If the queue is full it discards the oldest event so the newest
+// (e.g. a fresh arrival waitTag is blocked on) is never lost.
+func pushTagEvent(ev tagEvent) {
+	select {
+	case tagEvents <- ev:
+		return
+	default:
+	}
+	select {
+	case <-tagEvents:
+		nfc.Debugf("tag event queue full, dropped oldest event")
+	default:
+	}
+	select {
+	case tagEvents <- ev:
+	default:
+		fmt.Fprintln(os.Stderr, "warning: dropped tag event (queue full)")
+	}
+}
+
 func main() {
 	flag.Parse()
 	nfc.SetDebug(*debug)
 
+	// Global flags must precede the subcommand (standard flag.Parse behavior),
+	// e.g. "gonfc -debug poll".
 	args := flag.Args()
 	if len(args) < 1 {
 		usage()
@@ -81,22 +105,9 @@ func usage() {
 
 func run(fn func(context.Context) error) error {
 	nfc.SetTagHandler(nfc.TagHandler{
-		OnDiscovered: func(t nfc.Tag) {
-			select {
-			case tagEvents <- tagEvent{tag: t}:
-			default:
-				nfc.Debugf("dropped tag arrival (queue full)")
-			}
-		},
-		OnRemoved: func() {
-			select {
-			case tagEvents <- tagEvent{removed: true}:
-			default:
-				nfc.Debugf("dropped tag removal (queue full)")
-			}
-		},
+		OnDiscovered: func(t nfc.Tag) { pushTagEvent(tagEvent{tag: t}) },
+		OnRemoved:    func() { pushTagEvent(tagEvent{removed: true}) },
 	})
-	defer nfc.ClearTagHandler()
 
 	if err := nfc.Open(); err != nil {
 		return err
@@ -105,8 +116,11 @@ func run(fn func(context.Context) error) error {
 
 	nfc.StartDiscovery(nfc.DefaultDiscovery())
 	defer nfc.StopDiscovery()
+	// Deregister the C tag callback before StopDiscovery/Close tear down the
+	// stack (defers run LIFO).
+	defer nfc.ClearTagHandler()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	return fn(ctx)
 }
@@ -131,7 +145,12 @@ func poll(ctx context.Context) error {
 				}
 				printTag(ev.tag)
 				if err := printNDEF(ctx, ev.tag); err != nil {
-					return
+					// printNDEF only returns context errors; anything else means
+					// the context was cancelled, so stop the worker.
+					if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return
+					}
+					fmt.Fprintf(os.Stderr, "  poll: %v\n", err)
 				}
 			}
 		}
@@ -294,6 +313,9 @@ func writeNDEF(ctx context.Context, t nfc.Tag, msg []byte) error {
 	}
 	if hasNDEF && !info.Writable {
 		return errors.New("tag NDEF is read-only")
+	}
+	if hasNDEF && info.MaxLength > 0 && uint(len(msg)) > info.MaxLength {
+		return fmt.Errorf("message too large: %d bytes, tag holds %d", len(msg), info.MaxLength)
 	}
 	if !hasNDEF {
 		if t.Technology != nfc.TargetMifareClassic && !t.Formatable() {
